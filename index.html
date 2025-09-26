@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="kk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>To-do list — Қарапайым интерфейс + Уақыты</title>
+  <style>
+    :root{--bg:#f6f7fb;--card:#ffffff;--accent:#4f46e5;--muted:#6b7280}
+    *{box-sizing:border-box}
+    body{font-family:Inter,ui-sans-serif,system-ui,Arial;background:var(--bg);padding:28px}
+    .container{max-width:720px;margin:0 auto}
+    h1{font-size:24px;margin:0 0 18px}
+    .card{background:var(--card);padding:18px;border-radius:12px;box-shadow:0 6px 18px rgba(15,23,42,0.06)}
+    .add-row{display:flex;gap:8px;flex-wrap:wrap}
+    .add-row input{padding:10px 12px;border:1px solid #e6e9ef;border-radius:8px;font-size:14px}
+    .add-row input[type="text"]{flex:1;min-width:160px}
+    .btn{background:var(--accent);color:#fff;padding:10px 14px;border-radius:8px;border:0;cursor:pointer}
+    .btn.secondary{background:#eef2ff;color:var(--accent);border:1px solid rgba(79,70,229,0.08)}
+    .meta{display:flex;justify-content:space-between;align-items:center;margin-top:12px;color:var(--muted);font-size:14px}
+    .filters{display:flex;gap:8px}
+    .filters button{background:transparent;border:1px solid transparent;padding:6px 10px;border-radius:8px;cursor:pointer}
+    .filters button.active{background:#eef2ff;border-color:rgba(79,70,229,0.12);color:var(--accent)}
+    ul.tasks{list-style:none;padding:0;margin:14px 0 0}
+    li.task{display:flex;flex-direction:column;gap:4px;padding:10px;border-bottom:1px solid #f1f3f7}
+    .task-header{display:flex;align-items:center;gap:12px}
+    li.task .text{flex:1}
+    li.task.completed .text{text-decoration:line-through;color:#9aa0a6}
+    .small{font-size:13px;color:var(--muted)}
+    .empty{padding:18px;text-align:center;color:var(--muted)}
+    .controls{display:flex;gap:6px}
+    .controls button{background:transparent;border:0;cursor:pointer;padding:6px;border-radius:6px}
+    .controls button:hover{background:#f3f4f6}
+    @media (max-width:520px){body{padding:12px}.card{padding:14px}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>To-do тізімі — Қарапайым интерфейс</h1>
+    <div class="card">
+      <div class="add-row">
+        <input id="newTask" type="text" placeholder="Жаңа тапсырма..." />
+        <input id="taskTime" type="datetime-local" />
+        <button id="addBtn" class="btn">Қосу</button>
+      </div>
+
+      <div class="meta">
+        <div class="filters" role="tablist">
+          <button data-filter="all" class="active">Барлығы</button>
+          <button data-filter="active">Актив</button>
+          <button data-filter="completed">Аяқталған</button>
+        </div>
+        <div class="small" id="counts">0 тапсырма</div>
+      </div>
+
+      <ul id="tasks" class="tasks" aria-live="polite"></ul>
+
+      <div id="empty" class="empty" style="display:none">Тапсырмалар жоқ. Жоғарғыдан қосыңыз.</div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+        <div class="small" id="leftCount">0 қалды</div>
+        <div>
+          <button id="clearCompleted" class="btn secondary">Аяқталғандарды өшіру</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const LS_KEY = 'simple_todo_tasks_v2';
+  let tasks = JSON.parse(localStorage.getItem(LS_KEY)||'[]');
+  const elements = {
+    list: document.getElementById('tasks'),
+    newTask: document.getElementById('newTask'),
+    addBtn: document.getElementById('addBtn'),
+    counts: document.getElementById('counts'),
+    leftCount: document.getElementById('leftCount'),
+    filters: document.querySelectorAll('.filters button'),
+    empty: document.getElementById('empty'),
+    clearCompleted: document.getElementById('clearCompleted'),
+    taskTime: document.getElementById('taskTime')
+  };
+  let currentFilter = 'all';
+
+  function save(){ localStorage.setItem(LS_KEY, JSON.stringify(tasks)); }
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+  function addTask(text, time){
+    if(!text || !text.trim()) return;
+    tasks.unshift({id:uid(), text:text.trim(), done:false, created:Date.now(), deadline: time||null});
+    save(); render();
+  }
+  function toggleDone(id){ tasks = tasks.map(t=> t.id===id? {...t, done:!t.done}: t); save(); render(); }
+  function removeTask(id){ tasks = tasks.filter(t=>t.id!==id); save(); render(); }
+  function clearCompleted(){ tasks = tasks.filter(t=>!t.done); save(); render(); }
+  function editTask(id, newText){ tasks = tasks.map(t=> t.id===id? {...t, text:newText}: t); save(); render(); }
+
+  function filteredTasks(){
+    if(currentFilter==='active') return tasks.filter(t=>!t.done);
+    if(currentFilter==='completed') return tasks.filter(t=>t.done);
+    return tasks;
+  }
+
+  function render(){
+    const list = elements.list; list.innerHTML='';
+    const visible = filteredTasks();
+    if(visible.length===0){ elements.empty.style.display = tasks.length? 'none':'block'; }
+    else elements.empty.style.display='none';
+
+    visible.forEach(t=>{
+      const li = document.createElement('li'); li.className='task'+(t.done? ' completed':'');
+
+      const header = document.createElement('div'); header.className='task-header';
+
+      const checkbox = document.createElement('input'); checkbox.type='checkbox'; checkbox.checked = t.done;
+      checkbox.addEventListener('change', ()=> toggleDone(t.id));
+
+      const text = document.createElement('div'); text.className='text'; text.textContent = t.text;
+
+      const controls = document.createElement('div'); controls.className='controls';
+      const editBtn = document.createElement('button'); editBtn.textContent = 'Өзгерту';
+      editBtn.addEventListener('click', ()=> startEdit(li, t));
+      const del = document.createElement('button'); del.title='Жою'; del.innerHTML='🗑'; del.addEventListener('click', ()=> removeTask(t.id));
+      controls.appendChild(editBtn);
+      controls.appendChild(del);
+
+      header.appendChild(checkbox);
+      header.appendChild(text);
+      header.appendChild(controls);
+      li.appendChild(header);
+
+      const created = document.createElement('div'); created.className='small'; created.textContent = 'Қосылған: ' + timeAgo(t.created);
+      li.appendChild(created);
+
+      if(t.deadline){
+        const deadline = document.createElement('div'); deadline.className='small';
+        const d = new Date(t.deadline);
+        const expired = Date.now() > d.getTime();
+        deadline.textContent = 'Орындау уақыты: ' + d.toLocaleString();
+        if(expired && !t.done) deadline.style.color = 'red';
+        li.appendChild(deadline);
+      }
+
+      list.appendChild(li);
+    });
+
+    const total = tasks.length;
+    const done = tasks.filter(t=>t.done).length;
+    const left = total - done;
+    elements.counts.textContent = `${total} тапсырма — ${done} аяқталған`;
+    elements.leftCount.textContent = `${left} қалды`;
+
+    elements.filters.forEach(b=> b.classList.toggle('active', b.dataset.filter===currentFilter));
+  }
+
+  function startEdit(li, task){
+    const input = document.createElement('input'); input.type='text'; input.value = task.text; input.style.flex='1'; input.style.padding='8px';
+    li.querySelector('.text').replaceWith(input);
+    input.focus();
+    input.setSelectionRange(0, input.value.length);
+    function finish(){ const v = input.value.trim(); if(v){ editTask(task.id, v);} else { removeTask(task.id);} }
+    input.addEventListener('blur', finish);
+    input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ input.blur(); } if(e.key==='Escape'){ render(); } });
+  }
+
+  function timeAgo(ts){ const s = Math.floor((Date.now()-ts)/1000);
+    if(s<60) return `${s}s бұрын`;
+    const m=Math.floor(s/60); if(m<60) return `${m}m бұрын`;
+    const h=Math.floor(m/60); if(h<24) return `${h}h бұрын`;
+    const d=Math.floor(h/24); return `${d} күн бұрын`;
+  }
+
+  elements.addBtn.addEventListener('click', ()=>{
+    addTask(elements.newTask.value, elements.taskTime.value);
+    elements.newTask.value='';
+    elements.taskTime.value='';
+    elements.newTask.focus();
+  });
+  elements.newTask.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ addTask(elements.newTask.value, elements.taskTime.value); elements.newTask.value=''; elements.taskTime.value=''; } });
+  elements.filters.forEach(b=> b.addEventListener('click', ()=>{ currentFilter = b.dataset.filter; render(); }));
+  elements.clearCompleted.addEventListener('click', ()=>{ clearCompleted(); });
+
+  render();
+})();
+</script>
+</body>
+</html>
